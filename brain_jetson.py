@@ -52,7 +52,7 @@ import urllib.request
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-ANTHROPIC_API_KEY = "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"
+ANTHROPIC_API_KEY = ""
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 ARDUINO_PORT  = "/dev/ttyUSB0"   # change to /dev/ttyACM0 if not found  (run: ls /dev/tty*)
