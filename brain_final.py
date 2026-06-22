@@ -35,7 +35,7 @@ import urllib.request
 # ── Config ────────────────────────────────────────────────────────────────────
 
 VOSK_MODEL_PATH   = "vosk-model-small-en-us-0.15"
-ANTHROPIC_API_KEY = "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"          # paste your sk-ant-... key here
+ANTHROPIC_API_KEY = ""          # paste your sk-ant-... key here
 ARDUINO_PORT      = "COM3"
 ARDUINO_BAUD      = 9600
 WS_HOST           = "localhost"
