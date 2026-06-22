@@ -749,6 +749,7 @@ async def run_brain():
 
     arduino.connect(ARDUINO_PORT)
     await broadcast("planning", "Robot brain started (Jetson Nano)")
+    subprocess.Popen(["chromium-browser", str(Path(__file__).parent / "dashboard_unified.html")])
 
     global ws_command_handler, ws_enrollment_handler
 
