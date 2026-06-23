@@ -67,7 +67,7 @@ import pyds
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-ANTHROPIC_API_KEY = ""
+ANTHROPIC_API_KEY = "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"
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 ARDUINO_PORT  = "/dev/ttyUSB0"
@@ -398,25 +398,26 @@ def _probe_recognize(pad, info, u_data):
                 person_key, confidence = None, 0.0
                 aligned_feat = None
 
-                if _sface_rec is not None and encs_snapshot:
+                if _sface_rec is not None:
                     try:
                         aligned      = _sface_rec.alignCrop(frame_bgr, face_vec)
                         query_feat   = _sface_rec.feature(aligned)
                         aligned_feat = (aligned, query_feat)
 
-                        best_key, best_score = None, -1.0
-                        for pk, feats in encs_snapshot.items():
-                            for kf in feats:
-                                score = float(_sface_rec.match(
-                                    query_feat,
-                                    np.ascontiguousarray(kf, dtype=np.float32),
-                                    cv2.FaceRecognizerSF_FR_COSINE,
-                                ))
-                                if score > best_score:
-                                    best_score, best_key = score, pk
-                        if best_score >= SFACE_THRESHOLD:
-                            person_key = best_key
-                            confidence = round(best_score * 100, 1)
+                        if encs_snapshot:
+                            best_key, best_score = None, -1.0
+                            for pk, feats in encs_snapshot.items():
+                                for kf in feats:
+                                    score = float(_sface_rec.match(
+                                        query_feat,
+                                        np.ascontiguousarray(kf, dtype=np.float32),
+                                        cv2.FaceRecognizerSF_FR_COSINE,
+                                    ))
+                                    if score > best_score:
+                                        best_score, best_key = score, pk
+                            if best_score >= SFACE_THRESHOLD:
+                                person_key = best_key
+                                confidence = round(best_score * 100, 1)
                         else:
                             confidence = round(max(0.0, best_score * 100), 1)
                     except Exception as exc:
@@ -591,14 +592,14 @@ def _build_pipeline(enrollment: EnrollmentManager) -> Gst.Pipeline:
         src.set_property("device", CAMERA_DEVICE)
         caps_src = make("capsfilter", "caps_src")
         caps_src.set_property("caps", Gst.Caps.from_string(
-            f"video/x-raw,width={FRAME_W},height={FRAME_H},framerate=30/1"
+            f"video/x-raw,format=YUY2,width={FRAME_W},height={FRAME_H},framerate=30/1"
         ))
 
+    cpu_convert  = make("videoconvert", "cpu_convert")
+    caps_i420    = make("capsfilter", "caps_i420")
+    caps_i420.set_property("caps", Gst.Caps.from_string("video/x-raw,format=I420"))
+
     conv_to_nvmm = make("nvvideoconvert", "conv_to_nvmm")
-    caps_nvmm    = make("capsfilter", "caps_nvmm")
-    caps_nvmm.set_property("caps", Gst.Caps.from_string(
-        "video/x-raw(memory:NVMM),format=NV12"
-    ))
 
     # ── Streammux ─────────────────────────────────────────────────────────────
     mux = make("nvstreammux", "mux")
@@ -612,7 +613,6 @@ def _build_pipeline(enrollment: EnrollmentManager) -> Gst.Pipeline:
     tracker = make("nvtracker", "tracker")
     tracker.set_property("ll-lib-file",           DS_TRACKER_LIB)
     tracker.set_property("ll-config-file",        DS_TRACKER_CFG)
-    tracker.set_property("enable-batch-process",  True)
 
     # ── On-screen display ─────────────────────────────────────────────────────
     osd = make("nvdsosd", "osd")
@@ -636,10 +636,16 @@ def _build_pipeline(enrollment: EnrollmentManager) -> Gst.Pipeline:
 
     # ── Link source chain → mux via request pad ───────────────────────────────
     src.link(caps_src)
-    caps_src.link(conv_to_nvmm)
-    conv_to_nvmm.link(caps_nvmm)
+    caps_src.link(cpu_convert)
+    cpu_convert.link(caps_i420)
+    caps_i420.link(conv_to_nvmm)
     sink_pad = mux.get_request_pad("sink_0")
-    caps_nvmm.get_static_pad("src").link(sink_pad)
+    if sink_pad is None:
+        raise RuntimeError("Failed to get nvstreammux sink_0 pad")
+    src_pad = conv_to_nvmm.get_static_pad("src")
+    if src_pad is None:
+        raise RuntimeError("Failed to get conv_to_nvmm src pad")
+    src_pad.link(sink_pad)
 
     # ── Link mux → tracker → osd → output chain ──────────────────────────────
     mux.link(tracker)
